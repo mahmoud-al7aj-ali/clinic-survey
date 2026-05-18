@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ survey.title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='survey.css') }}">
+</head>
+<body>
+
+<div id="success-banner" class="success-banner"></div>
+
+<div class="cover">
+  <div class="deco" style="width:460px;height:460px;background:#1A56A0;opacity:0.28;top:-160px;right:-150px;"></div>
+  <div class="deco" style="width:280px;height:280px;background:#00C9A7;opacity:0.1;bottom:50px;left:-80px;"></div>
+  <header class="cover-top">
+    <div class="cover-top-inner">
+      <span class="brand">{{ survey.brand_name }}</span>
+      <span class="tag">{{ survey.tag }}</span>
+    </div>
+  </header>
+  <div class="cover-body">
+    <div class="eyebrow">— استطلاع رأي الأطباء</div>
+    <div class="cover-h1">ميزات<br><span class="acc">النظام</span></div>
+    <div class="cover-sub">تقييم الميزات المقترحة لعيادتك</div>
+    <div class="rule"></div>
+    <div class="cover-intro-block">
+      <div class="intro-box">{{ survey.intro_text }}</div>
+      <div class="cover-cta-wrap">
+        <button type="button" class="cover-cta" id="btn-start">ابدأ الاستبيان ←</button>
+      </div>
+    </div>
+    <div class="cover-stats-block">
+    <div class="stats-wrap">
+      <table class="stats-tbl"><tr>
+        <td><span class="sn">{{ total }}</span><span class="sl">ميزة مقترحة</span></td>
+        <td><span class="sn">{{ structure|length }}</span><span class="sl">محاور رئيسية</span></td>
+        <td><span class="sn">5 د</span><span class="sl">وقت التعبئة</span></td>
+      </tr></table>
+    </div>
+    </div>
+  </div>
+  <div class="cover-btm">
+    <table><tr>
+      <td class="note-r">اضغط على كل ميزة ثم أرسل إجاباتك في النهاية</td>
+      <td class="note-l">© 2025</td>
+    </tr></table>
+  </div>
+</div>
+
+{% for page in structure %}
+{% set section = page.section %}
+<div class="page">
+  <div class="stripe"></div>
+  <header class="ph">
+    <div class="ph-inner">
+      <div class="ph-text">
+        <div class="ph-lbl">{{ section.page_label }}</div>
+        <h2 class="ph-ttl">{{ section.page_title }}</h2>
+      </div>
+      <span class="ph-num">{{ section.page_num }}</span>
+    </div>
+  </header>
+  <div class="pb">
+    {% for block in page.groups %}
+    {% set group = block.group %}
+    <div class="sh">
+      <table><tr>
+        <td style="text-align:right;width:44px"><span class="sh-icon">{{ group.icon }}</span></td>
+        <td class="sh-text-cell"><h3>{{ group.title }}</h3><p>{{ group.subtitle }}</p></td>
+        <td style="text-align:left"><span class="sh-badge">{{ block.features|length }} ميزات</span></td>
+      </tr></table>
+    </div>
+    <table class="ft">
+      <thead><tr class="fth">
+        <td class="h-rate">التقييم</td>
+        <td class="h-desc">الميزة والوصف</td>
+        <td class="h-num">#</td>
+      </tr></thead>
+      <tbody>
+        {% for f in block.features %}
+        <tr class="{{ 'odd' if loop.index is odd else 'even' }}" data-feature-num="{{ f.feature_num }}">
+          <td class="c-rate">
+            <div class="rb-wrap" role="radiogroup" aria-label="{{ f.title }}">
+              {% for val, cls in [('very_important','g'), ('important','y'), ('nice_to_have','o'), ('not_needed','r')] %}
+              <button type="button" class="rb {{ cls }}" data-value="{{ val }}" aria-pressed="false">
+                <span class="rb-circle"></span>
+                <span class="rb-lbl">{{ rating_labels[val] }}</span>
+              </button>
+              {% endfor %}
+            </div>
+          </td>
+          <td class="c-desc">
+            <div class="fn-row">
+              <span class="fn">{{ f.title }}</span>
+              {% if f.long_description or f.description %}
+              <button type="button" class="btn-details" data-feature-id="{{ f.id }}" aria-label="عرض التفاصيل">التفاصيل</button>
+              {% endif %}
+            </div>
+            <div class="fi">{{ f.description }}</div>
+            <template id="long-desc-{{ f.id }}">{{ f.long_description or f.description }}</template>
+          </td>
+          <td class="c-num">{{ f.feature_num }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+  </div>
+  <div class="pf">
+    <table style="width:100%"><tr>
+      <td class="pf-brand">{{ survey.brand_name }}</td>
+      <td class="pf-num">{{ loop.index }} / {{ structure|length }}</td>
+    </tr></table>
+  </div>
+</div>
+{% endfor %}
+
+<div class="closing">
+  <div class="cl-icon">🙏</div>
+  <div class="cl-title">شكراً لمشاركتك</div>
+  <div class="cl-sub">عبّئ بياناتك وأرسل إجاباتك — تُحفظ مباشرة في النظام</div>
+  <div class="submit-panel" id="submit-panel">
+    <h3>بيانات العيادة</h3>
+    <input type="text" class="field" id="doctor-name" placeholder="اسم الطبيب *" autocomplete="name" required>
+    <input type="text" class="field" id="clinic-name" placeholder="اسم العيادة *" autocomplete="organization" required>
+    <input type="tel" class="field" id="phone" placeholder="رقم الهاتف *" autocomplete="tel" required>
+    <input type="email" class="field" id="email" placeholder="البريد الإلكتروني (اختياري)" autocomplete="email">
+    <textarea class="field field-notes" id="notes" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+    <button type="button" class="btn-submit btn-save" id="btn-save">إرسال الإجابات</button>
+    <p class="submit-msg" id="submit-msg"></p>
+  </div>
+</div>
+
+<div class="progress-dock is-hidden" id="progress-dock">
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+  <span class="progress-text" id="progress-text">0 / {{ total }}</span>
+  <button type="button" class="btn-dock" id="btn-goto-submit" disabled>إرسال</button>
+</div>
+
+<div class="detail-modal is-hidden" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+  <div class="detail-modal-backdrop" id="detail-modal-backdrop"></div>
+  <div class="detail-modal-box">
+    <button type="button" class="detail-modal-close" id="detail-modal-close" aria-label="إغلاق">×</button>
+    <h3 class="detail-modal-title" id="detail-modal-title"></h3>
+    <div class="detail-modal-body" id="detail-modal-body"></div>
+  </div>
+</div>
+
+<script>window.SURVEY_TOTAL = {{ total }};</script>
+<script src="{{ url_for('static', filename='survey.js') }}"></script>
+</body>
+</html>

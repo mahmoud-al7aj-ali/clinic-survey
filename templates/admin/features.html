@@ -1,0 +1,62 @@
+{% extends "admin/base.html" %}
+{% block title %}الميزات{% endblock %}
+{% block content %}
+<h1>تعديل الميزات</h1>
+
+<div class="panel">
+  <h2>إضافة ميزة</h2>
+  <form method="post" class="toolbar">
+    <input type="hidden" name="action" value="add">
+    <select name="group_id" required style="min-width:200px;padding:8px">
+      {% for g in all_groups %}
+      <option value="{{ g.id }}">{{ g.page_title }} — {{ g.title }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="title" placeholder="عنوان الميزة" required style="padding:8px;min-width:180px">
+    <input type="text" name="description" placeholder="وصف مختصر" style="padding:8px;min-width:180px">
+    <input type="text" name="long_description" placeholder="وصف تفصيلي (اختياري)" style="padding:8px;min-width:220px">
+    <button type="submit" class="btn btn-accent">إضافة</button>
+  </form>
+</div>
+
+{% for page in structure %}
+<div class="panel">
+  <h2>{{ page.section.page_label }} — {{ page.section.page_title }}</h2>
+  {% for block in page.groups %}
+  <p class="meta">{{ block.group.icon }} {{ block.group.title }}</p>
+  {% for f in block.features %}
+  <form method="post" class="feature-edit {% if not f.is_active %}inactive{% endif %}">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="feature_id" value="{{ f.id }}">
+    <div class="form-group" style="display:inline-block;width:80px">
+      <label>#</label>
+      <input type="number" name="feature_num" value="{{ f.feature_num }}" min="1">
+    </div>
+    <div class="form-group">
+      <label>العنوان</label>
+      <input type="text" name="title" value="{{ f.title }}" required>
+    </div>
+    <div class="form-group">
+      <label>وصف مختصر (يظهر في الجدول)</label>
+      <textarea name="description" rows="2">{{ f.description }}</textarea>
+    </div>
+    <div class="form-group">
+      <label>وصف تفصيلي (نافذة «التفاصيل»)</label>
+      <textarea name="long_description" rows="5">{{ f.long_description or f.description }}</textarea>
+    </div>
+    <label style="font-size:12px"><input type="checkbox" name="is_active" {% if f.is_active %}checked{% endif %}> نشطة</label>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary btn-sm">حفظ</button>
+    </div>
+  </form>
+  <form method="post" style="display:inline" onsubmit="return confirm('حذف هذه الميزة؟')">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="feature_id" value="{{ f.id }}">
+    <button type="submit" class="btn btn-danger btn-sm">حذف</button>
+  </form>
+  <hr style="margin:12px 0;border:none;border-top:1px solid #eee">
+  {% endfor %}
+  {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

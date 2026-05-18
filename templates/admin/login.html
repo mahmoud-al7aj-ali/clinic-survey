@@ -1,0 +1,19 @@
+{% extends "admin/base.html" %}
+{% block title %}تسجيل الدخول{% endblock %}
+{% block content %}
+<div class="login-box">
+  <h1>لوحة التحكم</h1>
+  <form method="post">
+    <div class="form-group">
+      <label>اسم المستخدم</label>
+      <input type="text" name="username" required autofocus value="admin">
+    </div>
+    <div class="form-group">
+      <label>كلمة المرور</label>
+      <input type="password" name="password" required>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">دخول</button>
+  </form>
+  <p style="margin-top:16px;font-size:11px;color:#6B7E9B;text-align:center">الافتراضي: admin / admin123</p>
+</div>
+{% endblock %}

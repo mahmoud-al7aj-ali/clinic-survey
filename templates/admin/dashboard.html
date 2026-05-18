@@ -1,0 +1,129 @@
+{% extends "admin/base.html" %}
+{% block title %}الرئيسية — لوحة التحكم{% endblock %}
+{% block content %}
+<h1>لوحة التحكم</h1>
+{% if not survey %}
+<p>لا يوجد استبيان. شغّل <code>python seed.py</code></p>
+{% else %}
+<div class="cards">
+  <div class="card"><div class="num">{{ total_responses }}</div><div class="lbl">إجابة مستلمة</div></div>
+  <div class="card"><div class="num">{{ total_features }}</div><div class="lbl">ميزة نشطة</div></div>
+  <div class="card"><div class="num">{{ rated_features_count }}</div><div class="lbl">ميزة مُقيّمة</div></div>
+</div>
+
+<div class="panel panel-rankings">
+  <div class="panel-head">
+    <h2>ترتيب الميزات حسب تقييم الأطباء</h2>
+    <p class="panel-hint">مُرتّبة من الأهم إلى الأقل أهمية بناءً على إجابات {{ total_responses }} طبيب</p>
+  </div>
+
+  <div class="sort-tabs">
+    <a href="{{ url_for('admin_dashboard', sort='score') }}" class="sort-tab {% if sort_by == 'score' %}active{% endif %}">درجة الأولوية</a>
+    <a href="{{ url_for('admin_dashboard', sort='very_important') }}" class="sort-tab {% if sort_by == 'very_important' %}active{% endif %}">مهمة جداً</a>
+    <a href="{{ url_for('admin_dashboard', sort='num') }}" class="sort-tab {% if sort_by == 'num' %}active{% endif %}">رقم الميزة</a>
+  </div>
+
+  {% if total_responses == 0 %}
+  <p class="empty-hint">لا توجد إجابات بعد — سيظهر الترتيب بعد تعبئة الأطباء للاستبيان.</p>
+  {% else %}
+  <div class="table-wrap">
+    <table class="data rankings-table">
+      <thead>
+        <tr>
+          <th class="col-rank">#</th>
+          <th class="col-feature">الميزة</th>
+          <th class="col-score">الدرجة</th>
+          <th>مهمة جداً</th>
+          <th>مهمة</th>
+          <th>مفيدة</th>
+          <th>غير ضرورية</th>
+          <th>الأغلبية</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in feature_rankings %}
+        <tr class="{% if loop.index <= 3 and f.total_votes %}top-row{% endif %}">
+          <td class="col-rank">{{ loop.index }}</td>
+          <td class="col-feature">
+            <span class="feat-num">{{ f.feature_num }}</span>
+            <strong>{{ f.title }}</strong>
+            <span class="feat-meta">{{ f.page_title }} · {{ f.group_title }}</span>
+          </td>
+          <td class="col-score">
+            {% if f.priority_score is not none %}
+            <span class="score-badge">{{ f.priority_score }}</span>
+            <div class="score-bar"><div class="score-fill" style="width:{{ ((f.priority_score - 1) / 3 * 100)|round }}%"></div></div>
+            {% else %}
+            <span class="no-votes">—</span>
+            {% endif %}
+          </td>
+          <td><span class="cnt very_important">{{ f.cnt_very_important }}</span></td>
+          <td><span class="cnt important">{{ f.cnt_important }}</span></td>
+          <td><span class="cnt nice_to_have">{{ f.cnt_nice_to_have }}</span></td>
+          <td><span class="cnt not_needed">{{ f.cnt_not_needed }}</span></td>
+          <td>
+            {% if f.total_votes %}
+            {% if f.cnt_very_important >= f.cnt_important and f.cnt_very_important >= f.cnt_nice_to_have and f.cnt_very_important >= f.cnt_not_needed %}
+            <span class="rating-pill very_important">مهمة جداً</span>
+            {% elif f.cnt_not_needed >= f.cnt_very_important and f.cnt_not_needed >= f.cnt_important %}
+            <span class="rating-pill not_needed">غير ضرورية</span>
+            {% elif f.cnt_important >= f.cnt_nice_to_have %}
+            <span class="rating-pill important">مهمة</span>
+            {% else %}
+            <span class="rating-pill nice_to_have">مفيدة</span>
+            {% endif %}
+            {% else %}
+            —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="score-legend">الدرجة من 1 إلى 4 (متوسط مرجّح: مهمة جداً=4، مهمة=3، مفيدة=2، غير ضرورية=1)</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <div class="toolbar">
+    <a href="{{ url_for('admin_responses') }}" class="btn btn-primary">كل الإجابات</a>
+    <a href="{{ url_for('admin_export_csv') }}" class="btn btn-accent">تصدير CSV</a>
+    <a href="{{ url_for('admin_features') }}" class="btn btn-primary">تعديل الميزات</a>
+  </div>
+  <h2>توزيع التقييمات (إجمالي)</h2>
+  <table class="data">
+    <thead><tr><th>التقييم</th><th>العدد</th></tr></thead>
+    <tbody>
+      {% for key, label in rating_labels.items() %}
+      <tr>
+        <td><span class="rating-pill {{ key }}">{{ label }}</span></td>
+        <td>{{ rating_counts.get(key, 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>آخر الإجابات</h2>
+  {% if not recent %}
+  <p style="color:#6B7E9B">لا توجد إجابات بعد.</p>
+  {% else %}
+  <table class="data">
+    <thead><tr><th>الطبيب</th><th>العيادة</th><th>التاريخ</th><th></th></tr></thead>
+    <tbody>
+      {% for r in recent %}
+      <tr>
+        <td>{{ r.doctor_name }}</td>
+        <td>{{ r.clinic_name }}</td>
+        <td>{{ r.submitted_at }}</td>
+        <td><a href="{{ url_for('admin_response_detail', response_id=r.id) }}">عرض</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% block title %}إعدادات الاستبيان{% endblock %}
+{% block content %}
+<h1>إعدادات الاستبيان</h1>
+<div class="panel" style="max-width:640px">
+  <form method="post">
+    <div class="form-group">
+      <label>العنوان</label>
+      <input type="text" name="title" value="{{ survey.title }}" required>
+    </div>
+    <div class="form-group">
+      <label>اسم العلامة</label>
+      <input type="text" name="brand_name" value="{{ survey.brand_name }}" required>
+    </div>
+    <div class="form-group">
+      <label>الوسم</label>
+      <input type="text" name="tag" value="{{ survey.tag }}">
+    </div>
+    <div class="form-group">
+      <label>نص المقدمة</label>
+      <textarea name="intro_text">{{ survey.intro_text }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-accent">حفظ</button>
+  </form>
+</div>
+{% endblock %}

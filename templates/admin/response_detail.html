@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% block title %}إجابة #{{ response.id }}{% endblock %}
+{% block content %}
+<h1>إجابة #{{ response.id }}</h1>
+<div class="panel">
+  <p><strong>الطبيب:</strong> {{ response.doctor_name }}</p>
+  <p><strong>العيادة:</strong> {{ response.clinic_name }}</p>
+  <p><strong>الهاتف:</strong> {{ response.phone or '—' }}</p>
+  <p><strong>البريد:</strong> {{ response.email or '—' }}</p>
+  <p><strong>التاريخ:</strong> {{ response.submitted_at }}</p>
+  {% if response.notes %}
+  <p><strong>ملاحظات:</strong> {{ response.notes }}</p>
+  {% endif %}
+</div>
+
+{% for key, label in rating_labels.items() %}
+{% if grouped[key] %}
+<div class="panel">
+  <h2><span class="rating-pill {{ key }}">{{ label }}</span> ({{ grouped[key]|length }})</h2>
+  <table class="data">
+    <thead><tr><th>#</th><th>الميزة</th></tr></thead>
+    <tbody>
+      {% for a in grouped[key] %}
+      <tr><td>{{ a.feature_num }}</td><td>{{ a.title }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endfor %}
+
+<p style="margin-top:20px"><a href="{{ url_for('admin_responses') }}">← العودة للقائمة</a></p>
+{% endblock %}

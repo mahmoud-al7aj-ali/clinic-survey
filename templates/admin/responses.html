@@ -1,0 +1,42 @@
+{% extends "admin/base.html" %}
+{% block title %}الإجابات{% endblock %}
+{% block content %}
+<h1>إجابات العملاء</h1>
+<div class="toolbar">
+  <a href="{{ url_for('admin_export_csv') }}" class="btn btn-accent">تصدير CSV</a>
+</div>
+<div class="panel">
+  {% if not responses %}
+  <p style="color:#6B7E9B">لا توجد إجابات بعد.</p>
+  {% else %}
+  <table class="data">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>الطبيب</th>
+        <th>العيادة</th>
+        <th>الهاتف</th>
+        <th>البريد</th>
+        <th>التاريخ</th>
+        <th>الميزات</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in responses %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ r.doctor_name }}</td>
+        <td>{{ r.clinic_name }}</td>
+        <td>{{ r.phone or '—' }}</td>
+        <td>{{ r.email or '—' }}</td>
+        <td>{{ r.submitted_at }}</td>
+        <td>{{ r.answer_count }}</td>
+        <td><a href="{{ url_for('admin_response_detail', response_id=r.id) }}">تفاصيل</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}
