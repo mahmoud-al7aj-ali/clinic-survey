@@ -18,6 +18,47 @@ def utc_now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def normalize_phone(phone):
+    return "".join(c for c in (phone or "") if c.isdigit())
+
+
+def find_existing_response(conn, survey_id, phone, email=None):
+    """
+    Find a prior submission for this survey by phone or email.
+    Returns response id, 'conflict' if phone and email match different rows, or None.
+    """
+    norm_phone = normalize_phone(phone)
+    norm_email = (email or "").strip().lower()
+    by_phone = None
+    by_email = None
+    rows = conn.execute(
+        "SELECT id, phone, email FROM responses WHERE survey_id = ?",
+        (survey_id,),
+    ).fetchall()
+    for row in rows:
+        if norm_phone and normalize_phone(row["phone"]) == norm_phone:
+            by_phone = row["id"]
+        row_email = (row["email"] or "").strip().lower()
+        if norm_email and row_email and row_email == norm_email:
+            by_email = row["id"]
+    if by_phone and by_email and by_phone != by_email:
+        return "conflict"
+    return by_phone or by_email
+
+
+def email_used_by_other(conn, survey_id, email, exclude_response_id):
+    norm_email = (email or "").strip().lower()
+    if not norm_email:
+        return False
+    for row in conn.execute(
+        "SELECT id, email FROM responses WHERE survey_id = ? AND id != ?",
+        (survey_id, exclude_response_id),
+    ):
+        if (row["email"] or "").strip().lower() == norm_email:
+            return True
+    return False
+
+
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH)

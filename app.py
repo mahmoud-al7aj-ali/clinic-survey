@@ -19,6 +19,8 @@ from database import (
     RATING_LABELS,
     count_active_features,
     feature_rating_rankings,
+    email_used_by_other,
+    find_existing_response,
     get_active_survey,
     get_db,
     init_db,
@@ -126,14 +128,72 @@ def api_submit():
             if v not in RATING_LABELS:
                 return jsonify({"ok": False, "error": "تقييم غير صالح"}), 400
 
-        cur = conn.execute(
-            """
-            INSERT INTO responses (survey_id, doctor_name, clinic_name, phone, email, notes, submitted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (survey_row["id"], doctor, clinic, phone, email or None, notes, utc_now()),
+        existing_id = find_existing_response(
+            conn, survey_row["id"], phone, email or None
         )
-        response_id = cur.lastrowid
+        if existing_id == "conflict":
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "رقم الهاتف والبريد مرتبطان بإجابتين مختلفتين. استخدم نفس بيانات الإرسال الأول.",
+                }
+            ), 409
+
+        now = utc_now()
+        if existing_id:
+            if email and email_used_by_other(
+                conn, survey_row["id"], email, existing_id
+            ):
+                return jsonify(
+                    {
+                        "ok": False,
+                        "error": "هذا البريد الإلكتروني مستخدم في إجابة أخرى.",
+                    }
+                ), 409
+            conn.execute(
+                """
+                UPDATE responses
+                SET doctor_name=?, clinic_name=?, phone=?, email=?, notes=?, submitted_at=?
+                WHERE id=? AND survey_id=?
+                """,
+                (
+                    doctor,
+                    clinic,
+                    phone,
+                    email or None,
+                    notes,
+                    now,
+                    existing_id,
+                    survey_row["id"],
+                ),
+            )
+            conn.execute(
+                "DELETE FROM response_answers WHERE response_id = ?",
+                (existing_id,),
+            )
+            response_id = existing_id
+            success_message = "تم تحديث إجاباتك بنجاح"
+            updated = True
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO responses (survey_id, doctor_name, clinic_name, phone, email, notes, submitted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    survey_row["id"],
+                    doctor,
+                    clinic,
+                    phone,
+                    email or None,
+                    notes,
+                    now,
+                ),
+            )
+            response_id = cur.lastrowid
+            success_message = "شكراً — تم حفظ إجاباتك بنجاح"
+            updated = False
+
         for num, rating in answers.items():
             conn.execute(
                 """
@@ -143,7 +203,9 @@ def api_submit():
                 (response_id, by_num[str(num)], rating),
             )
 
-    return jsonify({"ok": True, "message": "شكراً — تم حفظ إجاباتك بنجاح"})
+    return jsonify(
+        {"ok": True, "message": success_message, "updated": updated}
+    )
 
 
 # ─── Admin auth ──────────────────────────────────────────────────

@@ -194,7 +194,7 @@
         successBanner.textContent = data.message;
         successBanner.classList.add('show');
       }
-      btn.textContent = 'تم الإرسال ✓';
+      btn.textContent = data.updated ? 'تم التحديث ✓' : 'تم الإرسال ✓';
     } catch (e) {
       setMsg('تعذر الاتصال بالخادم', 'err');
       btn.disabled = false;
