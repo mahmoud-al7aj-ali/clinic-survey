@@ -131,11 +131,11 @@
         });
         groupsHtml += `
         <div class="sh">
-          <table><tr>
-            <td style="text-align:right;width:44px"><span class="sh-icon">${esc(block.group.icon)}</span></td>
-            <td class="sh-text-cell"><h3>${esc(block.group.title)}</h3><p>${esc(block.group.subtitle || "")}</p></td>
-            <td style="text-align:left"><span class="sh-badge">${block.features.length} ميزات</span></td>
-          </tr></table>
+          <div class="sh-inner">
+            <span class="sh-badge">${block.features.length} ميزات</span>
+            <div class="sh-text-cell"><h3>${esc(block.group.title)}</h3><p>${esc(block.group.subtitle || "")}</p></div>
+            <span class="sh-icon">${esc(block.group.icon)}</span>
+          </div>
         </div>
         <table class="ft">
           <thead><tr class="fth">

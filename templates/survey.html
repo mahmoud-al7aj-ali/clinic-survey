@@ -73,11 +73,11 @@
     {% for block in page.groups %}
     {% set group = block.group %}
     <div class="sh">
-      <table><tr>
-        <td style="text-align:right;width:44px"><span class="sh-icon">{{ group.icon }}</span></td>
-        <td class="sh-text-cell"><h3>{{ group.title }}</h3><p>{{ group.subtitle }}</p></td>
-        <td style="text-align:left"><span class="sh-badge">{{ block.features|length }} ميزات</span></td>
-      </tr></table>
+      <div class="sh-inner">
+        <span class="sh-badge">{{ block.features|length }} ميزات</span>
+        <div class="sh-text-cell"><h3>{{ group.title }}</h3><p>{{ group.subtitle }}</p></div>
+        <span class="sh-icon">{{ group.icon }}</span>
+      </div>
     </div>
     <table class="ft">
       <thead><tr class="fth">
