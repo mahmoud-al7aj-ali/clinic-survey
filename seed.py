@@ -1,7 +1,7 @@
 """Seed default survey (run once: python seed.py)."""
 from werkzeug.security import generate_password_hash
 
-from database import get_db, init_db, migrate_db, utc_now
+from database import clear_all_data, get_supabase, init_db, survey_count, utc_now
 
 
 SEED_FEATURES = [
@@ -321,80 +321,91 @@ SECTIONS = [
 
 def seed(force=False):
     init_db()
-    with get_db() as conn:
-        migrate_db(conn)
-        if not force and conn.execute("SELECT COUNT(*) FROM surveys").fetchone()[0] > 0:
-            print("Database already seeded. Use seed(force=True) to reset.")
-            return
+    if not force and survey_count() > 0:
+        print("Database already seeded. Use seed(force=True) to reset.")
+        return
 
-        if force:
-            conn.executescript(
-                """
-                DELETE FROM response_answers;
-                DELETE FROM responses;
-                DELETE FROM features;
-                DELETE FROM feature_groups;
-                DELETE FROM sections;
-                DELETE FROM surveys;
-                DELETE FROM admin_users;
-                """
-            )
+    if force:
+        clear_all_data()
 
-        now = utc_now()
-        cur = conn.execute(
-            """
-            INSERT INTO surveys (
-                title, brand_name, tag, intro_text,
-                promo_enabled, promo_badge, promo_text,
-                is_active, created_at
-            )
-            VALUES (?, ?, ?, ?, 1, ?, ?, 1, ?)
-            """,
-            (
-                "استطلاع رأي — نظام إدارة العيادات",
-                "نظام إدارة العيادات الذكي",
-                "2025 — استطلاع أولويات",
-                "عزيزي الطبيب، يُسعدنا مشاركتك في تشكيل منتجنا. اختر لكل ميزة أحد الخيارات الأربعة — رأيك يُحدد ما نبنيه أولاً.",
-                "خصم 10%",
-                "سجّل عبر الاستبيان واحصل على <strong>خصم 10%</strong> على الاشتراك السنوي",
-                now,
-            ),
+    sb = get_supabase()
+    now = utc_now()
+    survey_row = (
+        sb.table("surveys")
+        .insert(
+            {
+                "title": "استطلاع رأي — نظام إدارة العيادات",
+                "brand_name": "نظام إدارة العيادات الذكي",
+                "tag": "2025 — استطلاع أولويات",
+                "intro_text": "عزيزي الطبيب، يُسعدنا مشاركتك في تشكيل منتجنا. اختر لكل ميزة أحد الخيارات الأربعة — رأيك يُحدد ما نبنيه أولاً.",
+                "promo_enabled": True,
+                "promo_badge": "خصم 10%",
+                "promo_text": "سجّل عبر الاستبيان واحصل على <strong>خصم 10%</strong> على الاشتراك السنوي",
+                "is_active": True,
+                "created_at": now,
+            }
         )
-        survey_id = cur.lastrowid
+        .execute()
+        .data[0]
+    )
+    survey_id = survey_row["id"]
 
-        for page_order, page_label, page_title, page_num, group_indices in SECTIONS:
-            sec = conn.execute(
-                """
-                INSERT INTO sections (survey_id, page_order, page_label, page_title, page_num)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (survey_id, page_order, page_label, page_title, page_num),
+    for page_order, page_label, page_title, page_num, group_indices in SECTIONS:
+        section_row = (
+            sb.table("sections")
+            .insert(
+                {
+                    "survey_id": survey_id,
+                    "page_order": page_order,
+                    "page_label": page_label,
+                    "page_title": page_title,
+                    "page_num": page_num,
+                }
             )
-            section_id = sec.lastrowid
-            for g_order, g_idx in enumerate(group_indices):
-                icon, g_title, g_sub, feats = SEED_FEATURES[g_idx]
-                gcur = conn.execute(
-                    """
-                    INSERT INTO feature_groups (section_id, icon, title, subtitle, sort_order)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (section_id, icon, g_title, g_sub, g_order),
+            .execute()
+            .data[0]
+        )
+        section_id = section_row["id"]
+        for g_order, g_idx in enumerate(group_indices):
+            icon, g_title, g_sub, feats = SEED_FEATURES[g_idx]
+            group_row = (
+                sb.table("feature_groups")
+                .insert(
+                    {
+                        "section_id": section_id,
+                        "icon": icon,
+                        "title": g_title,
+                        "subtitle": g_sub,
+                        "sort_order": g_order,
+                    }
                 )
-                group_id = gcur.lastrowid
-                for f_order, (num, title, desc, long_description) in enumerate(feats):
-                    conn.execute(
-                        """
-                        INSERT INTO features (group_id, feature_num, title, description, long_description, sort_order, is_active)
-                        VALUES (?, ?, ?, ?, ?, ?, 1)
-                        """,
-                        (group_id, num, title, desc, long_description.strip(), f_order),
-                    )
+                .execute()
+                .data[0]
+            )
+            group_id = group_row["id"]
+            feature_rows = [
+                {
+                    "group_id": group_id,
+                    "feature_num": num,
+                    "title": title,
+                    "description": desc,
+                    "long_description": long_description.strip(),
+                    "sort_order": f_order,
+                    "is_active": True,
+                }
+                for f_order, (num, title, desc, long_description) in enumerate(feats)
+            ]
+            sb.table("features").insert(feature_rows).execute()
 
-        conn.execute(
-            "INSERT INTO admin_users (username, password_hash) VALUES (?, ?)",
-            ("admin", generate_password_hash("clinic123456Mahmoud", method="pbkdf2:sha256")),
-        )
-        print(f"Seeded survey id={survey_id} with 29 features. Admin user: admin")
+    sb.table("admin_users").insert(
+        {
+            "username": "admin",
+            "password_hash": generate_password_hash(
+                "clinic123456Mahmoud", method="pbkdf2:sha256"
+            ),
+        }
+    ).execute()
+    print(f"Seeded survey id={survey_id} with 29 features. Admin user: admin")
 
 
 if __name__ == "__main__":

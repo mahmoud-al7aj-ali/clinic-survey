@@ -1,10 +1,11 @@
 import os
-import sqlite3
-from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Optional
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(BASE_DIR, "survey.db"))
+from dotenv import load_dotenv
+from supabase import Client, create_client
+
+load_dotenv()
 
 RATING_LABELS = {
     "very_important": "مهمة جداً",
@@ -13,249 +14,6 @@ RATING_LABELS = {
     "not_needed": "غير ضرورية",
 }
 
-
-def utc_now():
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def normalize_phone(phone):
-    return "".join(c for c in (phone or "") if c.isdigit())
-
-
-def find_existing_response(conn, survey_id, phone, email=None):
-    """
-    Find a prior submission for this survey by phone or email.
-    Returns response id, 'conflict' if phone and email match different rows, or None.
-    """
-    norm_phone = normalize_phone(phone)
-    norm_email = (email or "").strip().lower()
-    by_phone = None
-    by_email = None
-    rows = conn.execute(
-        "SELECT id, phone, email FROM responses WHERE survey_id = ?",
-        (survey_id,),
-    ).fetchall()
-    for row in rows:
-        if norm_phone and normalize_phone(row["phone"]) == norm_phone:
-            by_phone = row["id"]
-        row_email = (row["email"] or "").strip().lower()
-        if norm_email and row_email and row_email == norm_email:
-            by_email = row["id"]
-    if by_phone and by_email and by_phone != by_email:
-        return "conflict"
-    return by_phone or by_email
-
-
-def email_used_by_other(conn, survey_id, email, exclude_response_id):
-    norm_email = (email or "").strip().lower()
-    if not norm_email:
-        return False
-    for row in conn.execute(
-        "SELECT id, email FROM responses WHERE survey_id = ? AND id != ?",
-        (survey_id, exclude_response_id),
-    ):
-        if (row["email"] or "").strip().lower() == norm_email:
-            return True
-    return False
-
-
-@contextmanager
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-
-def init_db():
-    with get_db() as conn:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS surveys (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                brand_name TEXT NOT NULL DEFAULT 'نظام إدارة العيادات الذكي',
-                tag TEXT DEFAULT 'استطلاع أولويات',
-                intro_text TEXT,
-                promo_enabled INTEGER NOT NULL DEFAULT 1,
-                promo_badge TEXT DEFAULT 'خصم 10%',
-                promo_text TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS sections (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
-                page_order INTEGER NOT NULL DEFAULT 0,
-                page_label TEXT,
-                page_title TEXT,
-                page_num TEXT,
-                UNIQUE(survey_id, page_order)
-            );
-
-            CREATE TABLE IF NOT EXISTS feature_groups (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                section_id INTEGER NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
-                icon TEXT DEFAULT '📋',
-                title TEXT NOT NULL,
-                subtitle TEXT,
-                sort_order INTEGER NOT NULL DEFAULT 0
-            );
-
-            CREATE TABLE IF NOT EXISTS features (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_id INTEGER NOT NULL REFERENCES feature_groups(id) ON DELETE CASCADE,
-                feature_num INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT,
-                long_description TEXT,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
-
-            CREATE TABLE IF NOT EXISTS responses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
-                doctor_name TEXT NOT NULL,
-                clinic_name TEXT NOT NULL,
-                phone TEXT,
-                email TEXT,
-                notes TEXT,
-                wants_updates INTEGER NOT NULL DEFAULT 0,
-                submitted_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS response_answers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                response_id INTEGER NOT NULL REFERENCES responses(id) ON DELETE CASCADE,
-                feature_id INTEGER NOT NULL REFERENCES features(id),
-                rating TEXT NOT NULL,
-                UNIQUE(response_id, feature_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL
-            );
-            """
-        )
-        migrate_db(conn)
-
-
-def migrate_db(conn):
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(features)").fetchall()}
-    if "long_description" not in cols:
-        conn.execute("ALTER TABLE features ADD COLUMN long_description TEXT")
-        conn.execute(
-            """
-            UPDATE features
-            SET long_description = description
-            WHERE long_description IS NULL OR long_description = ''
-            """
-        )
-
-    response_cols = {
-        row[1] for row in conn.execute("PRAGMA table_info(responses)").fetchall()
-    }
-    if "email" not in response_cols:
-        conn.execute("ALTER TABLE responses ADD COLUMN email TEXT")
-    if "wants_updates" not in response_cols:
-        conn.execute(
-            "ALTER TABLE responses ADD COLUMN wants_updates INTEGER NOT NULL DEFAULT 0"
-        )
-
-    survey_cols = {row[1] for row in conn.execute("PRAGMA table_info(surveys)").fetchall()}
-    if "promo_enabled" not in survey_cols:
-        conn.execute(
-            "ALTER TABLE surveys ADD COLUMN promo_enabled INTEGER NOT NULL DEFAULT 1"
-        )
-    if "promo_badge" not in survey_cols:
-        conn.execute(
-            "ALTER TABLE surveys ADD COLUMN promo_badge TEXT DEFAULT 'خصم 10%'"
-        )
-    if "promo_text" not in survey_cols:
-        conn.execute("ALTER TABLE surveys ADD COLUMN promo_text TEXT")
-    conn.execute(
-        """
-        UPDATE surveys
-        SET promo_badge = 'خصم 10%'
-        WHERE promo_badge IS NULL OR promo_badge = ''
-        """
-    )
-    conn.execute(
-        """
-        UPDATE surveys
-        SET promo_text = 'سجّل عبر الاستبيان واحصل على <strong>خصم 10%</strong> على الاشتراك السنوي'
-        WHERE promo_text IS NULL OR promo_text = ''
-        """
-    )
-
-
-def get_active_survey(conn):
-    row = conn.execute(
-        "SELECT * FROM surveys WHERE is_active = 1 ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    return row
-
-
-def survey_structure(conn, survey_id):
-    sections = conn.execute(
-        """
-        SELECT * FROM sections
-        WHERE survey_id = ?
-        ORDER BY page_order
-        """,
-        (survey_id,),
-    ).fetchall()
-
-    structure = []
-    for section in sections:
-        groups = conn.execute(
-            """
-            SELECT * FROM feature_groups
-            WHERE section_id = ?
-            ORDER BY sort_order, id
-            """,
-            (section["id"],),
-        ).fetchall()
-        group_list = []
-        for group in groups:
-            features = conn.execute(
-                """
-                SELECT * FROM features
-                WHERE group_id = ? AND is_active = 1
-                ORDER BY sort_order, feature_num
-                """,
-                (group["id"],),
-            ).fetchall()
-            if features:
-                group_list.append({"group": group, "features": features})
-        if group_list:
-            structure.append({"section": section, "groups": group_list})
-    return structure
-
-
-def count_active_features(conn, survey_id):
-    return conn.execute(
-        """
-        SELECT COUNT(*) FROM features f
-        JOIN feature_groups g ON g.id = f.group_id
-        JOIN sections s ON s.id = g.section_id
-        WHERE s.survey_id = ? AND f.is_active = 1
-        """,
-        (survey_id,),
-    ).fetchone()[0]
-
-
 RATING_WEIGHTS = {
     "very_important": 4,
     "important": 3,
@@ -263,48 +21,387 @@ RATING_WEIGHTS = {
     "not_needed": 1,
 }
 
+_client: Optional[Client] = None
 
-def feature_rating_rankings(conn, survey_id, sort_by="score"):
-    """All active features with vote counts per rating, sorted for dashboard."""
-    rows = conn.execute(
-        """
-        SELECT
-            f.id,
-            f.feature_num,
-            f.title,
-            f.description,
-            g.title AS group_title,
-            s.page_title,
-            SUM(CASE WHEN ra.rating = 'very_important' THEN 1 ELSE 0 END) AS cnt_very_important,
-            SUM(CASE WHEN ra.rating = 'important' THEN 1 ELSE 0 END) AS cnt_important,
-            SUM(CASE WHEN ra.rating = 'nice_to_have' THEN 1 ELSE 0 END) AS cnt_nice_to_have,
-            SUM(CASE WHEN ra.rating = 'not_needed' THEN 1 ELSE 0 END) AS cnt_not_needed,
-            COUNT(ra.id) AS total_votes,
-            AVG(CASE ra.rating
-                WHEN 'very_important' THEN 4.0
-                WHEN 'important' THEN 3.0
-                WHEN 'nice_to_have' THEN 2.0
-                WHEN 'not_needed' THEN 1.0
-            END) AS priority_score
-        FROM features f
-        JOIN feature_groups g ON g.id = f.group_id
-        JOIN sections s ON s.id = g.section_id
-        LEFT JOIN response_answers ra ON ra.feature_id = f.id
-        LEFT JOIN responses r ON r.id = ra.response_id AND r.survey_id = ?
-        WHERE s.survey_id = ? AND f.is_active = 1
-        GROUP BY f.id
-        """,
-        (survey_id, survey_id),
-    ).fetchall()
 
-    items = [dict(row) for row in rows]
-    for item in items:
-        item["priority_score"] = (
-            round(item["priority_score"], 2) if item["priority_score"] is not None else None
+def get_supabase() -> Client:
+    global _client
+    if _client is None:
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_KEY")
+        if not url or not key:
+            raise RuntimeError(
+                "SUPABASE_URL and SUPABASE_KEY must be set (see .env.example)"
+            )
+        _client = create_client(url, key)
+    return _client
+
+
+def utc_now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def init_db():
+    get_supabase()
+
+
+def survey_count():
+    sb = get_supabase()
+    res = sb.table("surveys").select("id", count="exact").execute()
+    return res.count or 0
+
+
+def clear_all_data():
+    sb = get_supabase()
+    sb.table("surveys").delete().gte("id", 0).execute()
+    sb.table("admin_users").delete().gte("id", 0).execute()
+
+
+def normalize_phone(phone):
+    return "".join(c for c in (phone or "") if c.isdigit())
+
+
+def find_existing_response(survey_id, phone, email=None):
+    norm_phone = normalize_phone(phone)
+    norm_email = (email or "").strip().lower()
+    by_phone = None
+    by_email = None
+    sb = get_supabase()
+    rows = (
+        sb.table("responses")
+        .select("id, phone, email")
+        .eq("survey_id", survey_id)
+        .execute()
+        .data
+        or []
+    )
+    for row in rows:
+        if norm_phone and normalize_phone(row.get("phone")) == norm_phone:
+            by_phone = row["id"]
+        row_email = (row.get("email") or "").strip().lower()
+        if norm_email and row_email and row_email == norm_email:
+            by_email = row["id"]
+    if by_phone and by_email and by_phone != by_email:
+        return "conflict"
+    return by_phone or by_email
+
+
+def email_used_by_other(survey_id, email, exclude_response_id):
+    norm_email = (email or "").strip().lower()
+    if not norm_email:
+        return False
+    sb = get_supabase()
+    rows = (
+        sb.table("responses")
+        .select("id, email")
+        .eq("survey_id", survey_id)
+        .neq("id", exclude_response_id)
+        .execute()
+        .data
+        or []
+    )
+    return any((r.get("email") or "").strip().lower() == norm_email for r in rows)
+
+
+def get_active_survey():
+    sb = get_supabase()
+    rows = (
+        sb.table("surveys")
+        .select("*")
+        .eq("is_active", True)
+        .order("id", desc=True)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    return rows[0] if rows else None
+
+
+def survey_structure(survey_id):
+    sb = get_supabase()
+    sections = (
+        sb.table("sections")
+        .select("*")
+        .eq("survey_id", survey_id)
+        .order("page_order")
+        .execute()
+        .data
+        or []
+    )
+    structure = []
+    for section in sections:
+        groups = (
+            sb.table("feature_groups")
+            .select("*")
+            .eq("section_id", section["id"])
+            .order("sort_order")
+            .order("id")
+            .execute()
+            .data
+            or []
         )
-        tv = item["total_votes"] or 0
-        item["pct_very_important"] = (
-            round(100 * item["cnt_very_important"] / tv, 1) if tv else 0
+        group_list = []
+        for group in groups:
+            features = (
+                sb.table("features")
+                .select("*")
+                .eq("group_id", group["id"])
+                .eq("is_active", True)
+                .order("sort_order")
+                .order("feature_num")
+                .execute()
+                .data
+                or []
+            )
+            if features:
+                group_list.append({"group": group, "features": features})
+        if group_list:
+            structure.append({"section": section, "groups": group_list})
+    return structure
+
+
+def count_active_features(survey_id):
+    structure = survey_structure(survey_id)
+    return sum(len(g["features"]) for page in structure for g in page["groups"])
+
+
+def get_survey_features(survey_id):
+    sb = get_supabase()
+    sections = (
+        sb.table("sections").select("id").eq("survey_id", survey_id).execute().data or []
+    )
+    if not sections:
+        return []
+    section_ids = [s["id"] for s in sections]
+    groups = (
+        sb.table("feature_groups")
+        .select("id")
+        .in_("section_id", section_ids)
+        .execute()
+        .data
+        or []
+    )
+    if not groups:
+        return []
+    group_ids = [g["id"] for g in groups]
+    return (
+        sb.table("features")
+        .select("id, feature_num")
+        .in_("group_id", group_ids)
+        .eq("is_active", True)
+        .execute()
+        .data
+        or []
+    )
+
+
+def save_survey_response(
+    survey_id,
+    doctor,
+    clinic,
+    phone,
+    email,
+    notes,
+    wants_updates,
+    answers,
+    by_num,
+):
+    existing_id = find_existing_response(survey_id, phone, email or None)
+    if existing_id == "conflict":
+        return None, "conflict", False
+
+    sb = get_supabase()
+    now = utc_now()
+    payload = {
+        "doctor_name": doctor,
+        "clinic_name": clinic,
+        "phone": phone,
+        "email": email or None,
+        "notes": notes,
+        "wants_updates": bool(wants_updates),
+        "submitted_at": now,
+    }
+
+    if existing_id:
+        if email and email_used_by_other(survey_id, email, existing_id):
+            return None, "email_taken", False
+        sb.table("responses").update(payload).eq("id", existing_id).eq(
+            "survey_id", survey_id
+        ).execute()
+        sb.table("response_answers").delete().eq("response_id", existing_id).execute()
+        response_id = existing_id
+        updated = True
+    else:
+        payload["survey_id"] = survey_id
+        row = sb.table("responses").insert(payload).execute().data[0]
+        response_id = row["id"]
+        updated = False
+
+    answer_rows = [
+        {
+            "response_id": response_id,
+            "feature_id": by_num[str(num)],
+            "rating": rating,
+        }
+        for num, rating in answers.items()
+    ]
+    if answer_rows:
+        sb.table("response_answers").insert(answer_rows).execute()
+
+    return response_id, None, updated
+
+
+def get_admin_user(username):
+    sb = get_supabase()
+    rows = (
+        sb.table("admin_users")
+        .select("*")
+        .eq("username", username)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    return rows[0] if rows else None
+
+
+def count_responses(survey_id):
+    sb = get_supabase()
+    res = (
+        sb.table("responses")
+        .select("id", count="exact")
+        .eq("survey_id", survey_id)
+        .execute()
+    )
+    return res.count or 0
+
+
+def recent_responses(survey_id, limit=10):
+    sb = get_supabase()
+    return (
+        sb.table("responses")
+        .select("id, doctor_name, clinic_name, submitted_at")
+        .eq("survey_id", survey_id)
+        .order("submitted_at", desc=True)
+        .limit(limit)
+        .execute()
+        .data
+        or []
+    )
+
+
+def rating_counts_for_survey(survey_id):
+    sb = get_supabase()
+    responses = (
+        sb.table("responses").select("id").eq("survey_id", survey_id).execute().data
+        or []
+    )
+    if not responses:
+        return {}
+    response_ids = [r["id"] for r in responses]
+    answers = (
+        sb.table("response_answers")
+        .select("rating")
+        .in_("response_id", response_ids)
+        .execute()
+        .data
+        or []
+    )
+    counts = {}
+    for a in answers:
+        counts[a["rating"]] = counts.get(a["rating"], 0) + 1
+    return counts
+
+
+def feature_rating_rankings(survey_id, sort_by="score"):
+    sb = get_supabase()
+    sections = (
+        sb.table("sections").select("id, page_title").eq("survey_id", survey_id).execute().data
+        or []
+    )
+    section_map = {s["id"]: s for s in sections}
+    section_ids = list(section_map.keys())
+    if not section_ids:
+        return []
+
+    groups = (
+        sb.table("feature_groups")
+        .select("id, title, section_id")
+        .in_("section_id", section_ids)
+        .execute()
+        .data
+        or []
+    )
+    group_map = {g["id"]: g for g in groups}
+    group_ids = list(group_map.keys())
+    if not group_ids:
+        return []
+
+    features = (
+        sb.table("features")
+        .select("id, feature_num, title, description, group_id")
+        .in_("group_id", group_ids)
+        .eq("is_active", True)
+        .execute()
+        .data
+        or []
+    )
+
+    responses = (
+        sb.table("responses").select("id").eq("survey_id", survey_id).execute().data or []
+    )
+    response_ids = [r["id"] for r in responses]
+    answers = []
+    if response_ids:
+        answers = (
+            sb.table("response_answers")
+            .select("feature_id, rating")
+            .in_("response_id", response_ids)
+            .execute()
+            .data
+            or []
+        )
+
+    votes_by_feature = {}
+    for a in answers:
+        fid = a["feature_id"]
+        if fid not in votes_by_feature:
+            votes_by_feature[fid] = []
+        votes_by_feature[fid].append(a["rating"])
+
+    items = []
+    for f in features:
+        g = group_map.get(f["group_id"], {})
+        sec = section_map.get(g.get("section_id"), {})
+        ratings = votes_by_feature.get(f["id"], [])
+        cnt = {k: 0 for k in RATING_LABELS}
+        for r in ratings:
+            if r in cnt:
+                cnt[r] += 1
+        total = len(ratings)
+        if total:
+            score = sum(RATING_WEIGHTS.get(r, 0) for r in ratings) / total
+        else:
+            score = None
+        items.append(
+            {
+                "id": f["id"],
+                "feature_num": f["feature_num"],
+                "title": f["title"],
+                "description": f.get("description"),
+                "group_title": g.get("title"),
+                "page_title": sec.get("page_title"),
+                "cnt_very_important": cnt["very_important"],
+                "cnt_important": cnt["important"],
+                "cnt_nice_to_have": cnt["nice_to_have"],
+                "cnt_not_needed": cnt["not_needed"],
+                "total_votes": total,
+                "priority_score": round(score, 2) if score is not None else None,
+                "pct_very_important": (
+                    round(100 * cnt["very_important"] / total, 1) if total else 0
+                ),
+            }
         )
 
     if sort_by == "very_important":
@@ -325,5 +422,224 @@ def feature_rating_rankings(conn, survey_id, sort_by="score"):
                 x["feature_num"],
             )
         )
-
     return items
+
+
+def update_survey_settings(survey_id, data):
+    sb = get_supabase()
+    sb.table("surveys").update(data).eq("id", survey_id).execute()
+
+
+def list_feature_groups(survey_id):
+    sb = get_supabase()
+    sections = (
+        sb.table("sections")
+        .select("id, page_order, page_title")
+        .eq("survey_id", survey_id)
+        .order("page_order")
+        .execute()
+        .data
+        or []
+    )
+    section_ids = [s["id"] for s in sections]
+    if not section_ids:
+        return []
+    groups = (
+        sb.table("feature_groups")
+        .select("id, title, section_id, sort_order")
+        .in_("section_id", section_ids)
+        .order("sort_order")
+        .execute()
+        .data
+        or []
+    )
+    sec_title = {s["id"]: s["page_title"] for s in sections}
+    return [
+        {"id": g["id"], "title": g["title"], "page_title": sec_title.get(g["section_id"])}
+        for g in groups
+    ]
+
+
+def list_all_features(survey_id):
+    sb = get_supabase()
+    sections = (
+        sb.table("sections").select("id, page_title").eq("survey_id", survey_id).execute().data
+        or []
+    )
+    section_ids = [s["id"] for s in sections]
+    sec_title = {s["id"]: s["page_title"] for s in sections}
+    if not section_ids:
+        return []
+    groups = (
+        sb.table("feature_groups")
+        .select("id, title, section_id")
+        .in_("section_id", section_ids)
+        .execute()
+        .data
+        or []
+    )
+    group_ids = [g["id"] for g in groups]
+    group_meta = {g["id"]: g for g in groups}
+    if not group_ids:
+        return []
+    features = (
+        sb.table("features")
+        .select("*")
+        .in_("group_id", group_ids)
+        .order("feature_num")
+        .execute()
+        .data
+        or []
+    )
+    for f in features:
+        g = group_meta.get(f["group_id"], {})
+        f["group_title"] = g.get("title")
+        f["page_title"] = sec_title.get(g.get("section_id"))
+    return features
+
+
+def add_feature(group_id, title, description, long_description):
+    sb = get_supabase()
+    existing = (
+        sb.table("features")
+        .select("feature_num")
+        .eq("group_id", group_id)
+        .order("feature_num", desc=True)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    max_num = existing[0]["feature_num"] if existing else 0
+    sb.table("features").insert(
+        {
+            "group_id": group_id,
+            "feature_num": max_num + 1,
+            "title": title,
+            "description": description,
+            "long_description": long_description,
+            "sort_order": 999,
+            "is_active": True,
+        }
+    ).execute()
+
+
+def update_feature(feature_id, data):
+    get_supabase().table("features").update(data).eq("id", feature_id).execute()
+
+
+def delete_feature(feature_id):
+    get_supabase().table("features").delete().eq("id", feature_id).execute()
+
+
+def list_responses(survey_id):
+    sb = get_supabase()
+    responses = (
+        sb.table("responses")
+        .select("*")
+        .eq("survey_id", survey_id)
+        .order("submitted_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    if not responses:
+        return []
+    ids = [r["id"] for r in responses]
+    counts_raw = (
+        sb.table("response_answers")
+        .select("response_id")
+        .in_("response_id", ids)
+        .execute()
+        .data
+        or []
+    )
+    counts = {}
+    for row in counts_raw:
+        rid = row["response_id"]
+        counts[rid] = counts.get(rid, 0) + 1
+    for r in responses:
+        r["answer_count"] = counts.get(r["id"], 0)
+    return responses
+
+
+def get_response(response_id):
+    sb = get_supabase()
+    rows = (
+        sb.table("responses").select("*").eq("id", response_id).limit(1).execute().data or []
+    )
+    return rows[0] if rows else None
+
+
+def delete_response(response_id):
+    get_supabase().table("responses").delete().eq("id", response_id).execute()
+
+
+def get_response_answers(response_id):
+    sb = get_supabase()
+    answers = (
+        sb.table("response_answers")
+        .select("feature_id, rating")
+        .eq("response_id", response_id)
+        .execute()
+        .data
+        or []
+    )
+    if not answers:
+        return []
+    feature_ids = [a["feature_id"] for a in answers]
+    features = (
+        sb.table("features")
+        .select("id, feature_num, title")
+        .in_("id", feature_ids)
+        .execute()
+        .data
+        or []
+    )
+    fmap = {f["id"]: f for f in features}
+    result = []
+    for a in answers:
+        f = fmap.get(a["feature_id"], {})
+        result.append(
+            {
+                "feature_num": f.get("feature_num"),
+                "title": f.get("title"),
+                "rating": a["rating"],
+            }
+        )
+    result.sort(key=lambda x: x.get("feature_num") or 0)
+    return result
+
+
+def export_survey_data(survey_id):
+    features = list_all_features(survey_id)
+    features.sort(key=lambda x: x["feature_num"])
+    responses = (
+        get_supabase()
+        .table("responses")
+        .select("*")
+        .eq("survey_id", survey_id)
+        .order("submitted_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    return features, responses
+
+
+def get_answers_for_responses(response_ids):
+    if not response_ids:
+        return {}
+    rows = (
+        get_supabase()
+        .table("response_answers")
+        .select("response_id, feature_id, rating")
+        .in_("response_id", response_ids)
+        .execute()
+        .data
+        or []
+    )
+    by_response = {}
+    for row in rows:
+        by_response.setdefault(row["response_id"], {})[row["feature_id"]] = row["rating"]
+    return by_response

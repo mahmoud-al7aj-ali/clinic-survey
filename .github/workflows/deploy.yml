@@ -1,15 +1,11 @@
-name: CI and Deploy
+name: CI
 
 on:
   push:
-    branches: [deploy]
+    branches: [deploy, main]
   pull_request:
-    branches: [deploy]
+    branches: [deploy, main]
   workflow_dispatch:
-
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   test:
@@ -28,25 +24,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Verify imports and database init
+      - name: Verify imports
         env:
-          SECRET_KEY: ci-test-secret-key
+          SECRET_KEY: ci-test-secret
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          python -c "from app import app; from database import init_db; init_db(); print('OK:', app.name)"
-
-  deploy:
-    name: Deploy to Render
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
-    steps:
-      - name: Trigger Render deploy hook
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "::error::Add RENDER_DEPLOY_HOOK_URL in GitHub → Settings → Secrets and variables → Actions"
-            exit 1
-          fi
-          curl --fail-with-body -sS -X POST "$RENDER_DEPLOY_HOOK_URL"
-          echo "Render deploy triggered."
+          python -c "from app import app; print('OK:', app.name)"
