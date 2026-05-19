@@ -127,7 +127,9 @@ def init_db():
                 doctor_name TEXT NOT NULL,
                 clinic_name TEXT NOT NULL,
                 phone TEXT,
+                email TEXT,
                 notes TEXT,
+                wants_updates INTEGER NOT NULL DEFAULT 0,
                 submitted_at TEXT NOT NULL
             );
 
@@ -166,6 +168,10 @@ def migrate_db(conn):
     }
     if "email" not in response_cols:
         conn.execute("ALTER TABLE responses ADD COLUMN email TEXT")
+    if "wants_updates" not in response_cols:
+        conn.execute(
+            "ALTER TABLE responses ADD COLUMN wants_updates INTEGER NOT NULL DEFAULT 0"
+        )
 
     survey_cols = {row[1] for row in conn.execute("PRAGMA table_info(surveys)").fetchall()}
     if "promo_enabled" not in survey_cols:

@@ -605,6 +605,32 @@ body {
   box-shadow: 0 0 0 1px rgba(252, 165, 165, 0.4);
 }
 .field-notes { min-height: 72px; resize: vertical; }
+.updates-opt-in {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: right;
+}
+.updates-opt-in input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #00C9A7;
+  cursor: pointer;
+}
+.updates-opt-in span {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  line-height: 1.55;
+  font-weight: 600;
+}
 .btn-submit {
   width: 100%; border: none; font-family: inherit;
   font-size: 13px; font-weight: 700; padding: 12px;

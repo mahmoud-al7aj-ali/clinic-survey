@@ -180,6 +180,7 @@
           phone: phone,
           email: document.getElementById('email').value.trim(),
           notes: document.getElementById('notes').value.trim(),
+          wants_updates: document.getElementById('wants-updates').checked,
           answers: answers,
         }),
       });

@@ -88,6 +88,7 @@ def api_submit():
     phone = (data.get("phone") or "").strip()
     email = (data.get("email") or "").strip()
     notes = (data.get("notes") or "").strip()
+    wants_updates = 1 if data.get("wants_updates") else 0
     answers = data.get("answers") or {}
 
     if not doctor or not clinic or not phone:
@@ -153,7 +154,8 @@ def api_submit():
             conn.execute(
                 """
                 UPDATE responses
-                SET doctor_name=?, clinic_name=?, phone=?, email=?, notes=?, submitted_at=?
+                SET doctor_name=?, clinic_name=?, phone=?, email=?, notes=?,
+                    wants_updates=?, submitted_at=?
                 WHERE id=? AND survey_id=?
                 """,
                 (
@@ -162,6 +164,7 @@ def api_submit():
                     phone,
                     email or None,
                     notes,
+                    wants_updates,
                     now,
                     existing_id,
                     survey_row["id"],
@@ -177,8 +180,11 @@ def api_submit():
         else:
             cur = conn.execute(
                 """
-                INSERT INTO responses (survey_id, doctor_name, clinic_name, phone, email, notes, submitted_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO responses (
+                    survey_id, doctor_name, clinic_name, phone, email, notes,
+                    wants_updates, submitted_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     survey_row["id"],
@@ -187,6 +193,7 @@ def api_submit():
                     phone,
                     email or None,
                     notes,
+                    wants_updates,
                     now,
                 ),
             )
@@ -492,7 +499,16 @@ def admin_export_csv():
 
         buf = io.StringIO()
         writer = csv.writer(buf)
-        header = ["id", "doctor", "clinic", "phone", "email", "notes", "submitted_at"] + [
+        header = [
+            "id",
+            "doctor",
+            "clinic",
+            "phone",
+            "email",
+            "notes",
+            "wants_updates",
+            "submitted_at",
+        ] + [
             f"{f['feature_num']}. {f['title']}" for f in features
         ]
         writer.writerow(header)
@@ -510,6 +526,7 @@ def admin_export_csv():
                 r["phone"] or "",
                 r["email"] or "",
                 r["notes"] or "",
+                "yes" if r["wants_updates"] else "no",
                 r["submitted_at"],
             ]
             for f in features:

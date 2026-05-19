@@ -17,6 +17,7 @@
         <th>العيادة</th>
         <th>الهاتف</th>
         <th>البريد</th>
+        <th>تحديثات</th>
         <th>التاريخ</th>
         <th>الميزات</th>
         <th></th>
@@ -30,6 +31,7 @@
         <td>{{ r.clinic_name }}</td>
         <td>{{ r.phone or '—' }}</td>
         <td>{{ r.email or '—' }}</td>
+        <td>{% if r.wants_updates %}نعم{% else %}لا{% endif %}</td>
         <td>{{ r.submitted_at }}</td>
         <td>{{ r.answer_count }}</td>
         <td><a href="{{ url_for('admin_response_detail', response_id=r.id) }}">تفاصيل</a></td>

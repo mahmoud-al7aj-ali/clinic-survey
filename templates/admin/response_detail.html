@@ -7,6 +7,7 @@
   <p><strong>العيادة:</strong> {{ response.clinic_name }}</p>
   <p><strong>الهاتف:</strong> {{ response.phone or '—' }}</p>
   <p><strong>البريد:</strong> {{ response.email or '—' }}</p>
+  <p><strong>استلام التحديثات:</strong> {% if response.wants_updates %}نعم{% else %}لا{% endif %}</p>
   <p><strong>التاريخ:</strong> {{ response.submitted_at }}</p>
   {% if response.notes %}
   <p><strong>ملاحظات:</strong> {{ response.notes }}</p>
