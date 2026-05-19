@@ -43,6 +43,9 @@ def init_db():
                 brand_name TEXT NOT NULL DEFAULT 'نظام إدارة العيادات الذكي',
                 tag TEXT DEFAULT 'استطلاع أولويات',
                 intro_text TEXT,
+                promo_enabled INTEGER NOT NULL DEFAULT 1,
+                promo_badge TEXT DEFAULT 'خصم 10%',
+                promo_text TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             );
@@ -122,6 +125,32 @@ def migrate_db(conn):
     }
     if "email" not in response_cols:
         conn.execute("ALTER TABLE responses ADD COLUMN email TEXT")
+
+    survey_cols = {row[1] for row in conn.execute("PRAGMA table_info(surveys)").fetchall()}
+    if "promo_enabled" not in survey_cols:
+        conn.execute(
+            "ALTER TABLE surveys ADD COLUMN promo_enabled INTEGER NOT NULL DEFAULT 1"
+        )
+    if "promo_badge" not in survey_cols:
+        conn.execute(
+            "ALTER TABLE surveys ADD COLUMN promo_badge TEXT DEFAULT 'خصم 10%'"
+        )
+    if "promo_text" not in survey_cols:
+        conn.execute("ALTER TABLE surveys ADD COLUMN promo_text TEXT")
+    conn.execute(
+        """
+        UPDATE surveys
+        SET promo_badge = 'خصم 10%'
+        WHERE promo_badge IS NULL OR promo_badge = ''
+        """
+    )
+    conn.execute(
+        """
+        UPDATE surveys
+        SET promo_text = 'سجّل عبر الاستبيان واحصل على <strong>خصم 10%</strong> على الاشتراك السنوي'
+        WHERE promo_text IS NULL OR promo_text = ''
+        """
+    )
 
 
 def get_active_survey(conn):

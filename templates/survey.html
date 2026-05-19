@@ -20,6 +20,12 @@
       <span class="brand">{{ survey.brand_name }}</span>
       <span class="tag">{{ survey.tag }}</span>
     </div>
+    {% if survey.promo_enabled and (survey.promo_badge or survey.promo_text) %}
+    <div class="cover-promo cover-promo--header">
+      {% if survey.promo_badge %}<span class="cover-promo-badge">{{ survey.promo_badge }}</span>{% endif %}
+      {% if survey.promo_text %}<p class="cover-promo-text">{{ survey.promo_text|safe }}</p>{% endif %}
+    </div>
+    {% endif %}
   </header>
   <div class="cover-body">
     <div class="eyebrow">— استطلاع رأي الأطباء</div>

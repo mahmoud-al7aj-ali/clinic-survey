@@ -20,6 +20,23 @@
       <label>نص المقدمة</label>
       <textarea name="intro_text">{{ survey.intro_text }}</textarea>
     </div>
+    <hr style="margin:24px 0;border:none;border-top:1px solid #E2E8F0">
+    <h2 style="font-size:16px;margin-bottom:16px">عرض الخصم (الهيدر)</h2>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" name="promo_enabled" value="1" {% if survey.promo_enabled %}checked{% endif %}>
+        إظهار شريط الخصم في أعلى الصفحة
+      </label>
+    </div>
+    <div class="form-group">
+      <label>وسم الخصم (مثال: خصم 10%)</label>
+      <input type="text" name="promo_badge" value="{{ survey.promo_badge or '' }}">
+    </div>
+    <div class="form-group">
+      <label>نص العرض</label>
+      <textarea name="promo_text" rows="3">{{ survey.promo_text or '' }}</textarea>
+      <p class="panel-hint">يمكنك استخدام &lt;strong&gt;نص&lt;/strong&gt; لتظليل جزء من الجملة</p>
+    </div>
     <button type="submit" class="btn btn-accent">حفظ</button>
   </form>
 </div>

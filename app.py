@@ -50,9 +50,12 @@ def ensure_db():
     if _db_ready:
         return
     init_db()
-    with get_db() as conn:
-        if conn.execute("SELECT COUNT(*) FROM surveys").fetchone()[0] == 0:
-            seed()
+    if os.environ.get("SEED_FORCE") == "1":
+        seed(force=True)
+    else:
+        with get_db() as conn:
+            if conn.execute("SELECT COUNT(*) FROM surveys").fetchone()[0] == 0:
+                seed()
     _db_ready = True
 
 
@@ -238,7 +241,9 @@ def admin_survey_settings():
         if request.method == "POST":
             conn.execute(
                 """
-                UPDATE surveys SET title=?, brand_name=?, tag=?, intro_text=?
+                UPDATE surveys SET
+                    title=?, brand_name=?, tag=?, intro_text=?,
+                    promo_enabled=?, promo_badge=?, promo_text=?
                 WHERE id=?
                 """,
                 (
@@ -246,6 +251,9 @@ def admin_survey_settings():
                     request.form.get("brand_name", "").strip(),
                     request.form.get("tag", "").strip(),
                     request.form.get("intro_text", "").strip(),
+                    1 if request.form.get("promo_enabled") else 0,
+                    request.form.get("promo_badge", "").strip(),
+                    request.form.get("promo_text", "").strip(),
                     survey_row["id"],
                 ),
             )

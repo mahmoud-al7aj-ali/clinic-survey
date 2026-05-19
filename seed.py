@@ -90,14 +90,20 @@ def seed(force=False):
         now = utc_now()
         cur = conn.execute(
             """
-            INSERT INTO surveys (title, brand_name, tag, intro_text, is_active, created_at)
-            VALUES (?, ?, ?, ?, 1, ?)
+            INSERT INTO surveys (
+                title, brand_name, tag, intro_text,
+                promo_enabled, promo_badge, promo_text,
+                is_active, created_at
+            )
+            VALUES (?, ?, ?, ?, 1, ?, ?, 1, ?)
             """,
             (
                 "استطلاع رأي — نظام إدارة العيادات",
                 "نظام إدارة العيادات الذكي",
                 "2025 — استطلاع أولويات",
                 "عزيزي الطبيب، يُسعدنا مشاركتك في تشكيل منتجنا. اختر لكل ميزة أحد الخيارات الأربعة — رأيك يُحدد ما نبنيه أولاً.",
+                "خصم 10%",
+                "سجّل عبر الاستبيان واحصل على <strong>خصم 10%</strong> على الاشتراك السنوي",
                 now,
             ),
         )
@@ -133,9 +139,9 @@ def seed(force=False):
 
         conn.execute(
             "INSERT INTO admin_users (username, password_hash) VALUES (?, ?)",
-            ("admin", generate_password_hash("admin123", method="pbkdf2:sha256")),
+            ("admin", generate_password_hash("clinic123456Mahmoud", method="pbkdf2:sha256")),
         )
-        print(f"Seeded survey id={survey_id} with 29 features. Admin: admin / admin123")
+        print(f"Seeded survey id={survey_id} with 29 features. Admin user: admin")
 
 
 if __name__ == "__main__":
