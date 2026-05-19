@@ -1,7 +1,9 @@
-name: Deploy GitHub Pages
+name: CI and Deploy Pages
 
 on:
   push:
+    branches: [deploy, main]
+  pull_request:
     branches: [deploy, main]
   workflow_dispatch:
 
@@ -15,7 +17,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    name: Test app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Verify imports
+        env:
+          SECRET_KEY: ci-test-secret
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python -c "from app import app; print('OK:', app.name)"
+
   deploy:
+    name: Deploy GitHub Pages
+    needs: test
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -30,14 +55,11 @@ jobs:
           window.SUPABASE_KEY = "${{ secrets.SUPABASE_KEY }}";
           EOF
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v5
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
 
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
