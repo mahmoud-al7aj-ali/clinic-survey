@@ -1,7 +1,12 @@
 {% extends "admin/base.html" %}
 {% block title %}إجابة #{{ response.id }}{% endblock %}
 {% block content %}
-<h1>إجابة #{{ response.id }}</h1>
+<div class="page-header-row">
+  <h1>إجابة #{{ response.id }}</h1>
+  <form method="post" action="{{ url_for('admin_response_delete', response_id=response.id) }}" onsubmit="return confirm('حذف إجابة {{ response.doctor_name|e }}؟ لا يمكن التراجع.');">
+    <button type="submit" class="btn btn-danger">حذف الإجابة</button>
+  </form>
+</div>
 <div class="panel">
   <p><strong>الطبيب:</strong> {{ response.doctor_name }}</p>
   <p><strong>العيادة:</strong> {{ response.clinic_name }}</p>

@@ -443,6 +443,21 @@ def admin_responses():
     return render_template("admin/responses.html", responses=rows, survey=survey_row)
 
 
+@app.route("/admin/responses/<int:response_id>/delete", methods=["POST"])
+@login_required
+def admin_response_delete(response_id):
+    with get_db() as conn:
+        resp = conn.execute(
+            "SELECT id, doctor_name FROM responses WHERE id = ?", (response_id,)
+        ).fetchone()
+        if not resp:
+            flash("الإجابة غير موجودة", "error")
+            return redirect(url_for("admin_responses"))
+        conn.execute("DELETE FROM responses WHERE id = ?", (response_id,))
+    flash(f"تم حذف إجابة الطبيب «{resp['doctor_name']}»", "ok")
+    return redirect(url_for("admin_responses"))
+
+
 @app.route("/admin/responses/<int:response_id>")
 @login_required
 def admin_response_detail(response_id):

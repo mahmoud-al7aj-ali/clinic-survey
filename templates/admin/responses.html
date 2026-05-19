@@ -20,7 +20,7 @@
         <th>تحديثات</th>
         <th>التاريخ</th>
         <th>الميزات</th>
-        <th></th>
+        <th>إجراءات</th>
       </tr>
     </thead>
     <tbody>
@@ -34,7 +34,12 @@
         <td>{% if r.wants_updates %}نعم{% else %}لا{% endif %}</td>
         <td>{{ r.submitted_at }}</td>
         <td>{{ r.answer_count }}</td>
-        <td><a href="{{ url_for('admin_response_detail', response_id=r.id) }}">تفاصيل</a></td>
+        <td class="actions-cell">
+          <a href="{{ url_for('admin_response_detail', response_id=r.id) }}">تفاصيل</a>
+          <form method="post" action="{{ url_for('admin_response_delete', response_id=r.id) }}" class="inline-form" onsubmit="return confirm('حذف إجابة {{ r.doctor_name|e }}؟ لا يمكن التراجع.');">
+            <button type="submit" class="btn btn-danger btn-sm">حذف</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
