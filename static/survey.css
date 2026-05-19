@@ -830,10 +830,30 @@ body.has-dock { padding-bottom: 72px; }
 
   .sh table, .sh tr, .sh td { display: block; width: 100%; }
   .ft thead { display: none; }
-  .ft tbody tr { display: block; margin-bottom: 14px; border: 1px solid #DDE8F5; border-radius: 12px; overflow: hidden; }
+  .ft tbody tr {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+    border: 1px solid #DDE8F5;
+    border-radius: 12px;
+    overflow: hidden;
+  }
   .ft tbody td { display: block; width: 100% !important; border: none !important; }
-  .ft tbody .c-num { background: #0B1F3A !important; text-align: right; }
-  .ft tbody .c-desc { border-bottom: 1px solid #DDE8F5; }
+  .ft tbody .c-num {
+    order: 1;
+    background: #0B1F3A !important;
+    text-align: right;
+  }
+  .ft tbody .c-desc {
+    order: 2;
+    border-bottom: 1px solid #DDE8F5;
+  }
+  .ft tbody .c-rate {
+    order: 3;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    border-left: none !important;
+  }
   .rb { width: calc(50% - 6px); flex: 1 1 calc(50% - 6px); }
 }
 
