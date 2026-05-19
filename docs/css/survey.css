@@ -898,7 +898,19 @@ body.has-dock { padding-bottom: 72px; }
   .ph-text { text-align: center; width: 100%; }
   .ph-num { order: -1; }
 
-  .sh-inner { flex-wrap: wrap; }
+  .sh-inner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "badge text"
+      "icon text";
+    direction: rtl;
+    align-items: center;
+    gap: 8px 10px;
+  }
+  .sh-badge { grid-area: badge; }
+  .sh-text-cell { grid-area: text; }
+  .sh-icon { grid-area: icon; }
   .ft thead { display: none; }
   .ft tbody tr {
     display: flex;
