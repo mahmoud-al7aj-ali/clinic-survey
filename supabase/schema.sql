@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS features (
     description TEXT,
     long_description TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    question_type TEXT NOT NULL DEFAULT 'rating'
 );
 
 CREATE TABLE IF NOT EXISTS responses (

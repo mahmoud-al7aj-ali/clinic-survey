@@ -15,6 +15,10 @@
     <input type="text" name="title" placeholder="عنوان الميزة" required style="padding:8px;min-width:180px">
     <input type="text" name="description" placeholder="وصف مختصر" style="padding:8px;min-width:180px">
     <input type="text" name="long_description" placeholder="وصف تفصيلي (اختياري)" style="padding:8px;min-width:220px">
+    <select name="question_type" style="padding:8px;min-width:160px">
+      <option value="rating">تقييم (4 خيارات)</option>
+      <option value="yes_no">نعم / لا</option>
+    </select>
     <button type="submit" class="btn btn-accent">إضافة</button>
   </form>
 </div>
@@ -25,6 +29,13 @@
   {% for block in page.groups %}
   <p class="meta">{{ block.group.icon }} {{ block.group.title }}</p>
   {% for f in block.features %}
+  <p class="meta" style="margin:0 0 8px">
+    {% if (f.question_type or 'rating') == 'yes_no' %}
+    <span class="type-badge type-yesno">سؤال نعم/لا</span>
+    {% else %}
+    <span class="type-badge type-rating">تقييم</span>
+    {% endif %}
+  </p>
   <form method="post" class="feature-edit {% if not f.is_active %}inactive{% endif %}">
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="feature_id" value="{{ f.id }}">
@@ -43,6 +54,13 @@
     <div class="form-group">
       <label>وصف تفصيلي (نافذة «التفاصيل»)</label>
       <textarea name="long_description" rows="5">{{ f.long_description or f.description }}</textarea>
+    </div>
+    <div class="form-group">
+      <label>نوع السؤال</label>
+      <select name="question_type">
+        <option value="rating" {% if (f.question_type or 'rating') == 'rating' %}selected{% endif %}>تقييم (4 خيارات)</option>
+        <option value="yes_no" {% if f.question_type == 'yes_no' %}selected{% endif %}>نعم / لا</option>
+      </select>
     </div>
     <label style="font-size:12px"><input type="checkbox" name="is_active" {% if f.is_active %}checked{% endif %}> نشطة</label>
     <div class="actions">

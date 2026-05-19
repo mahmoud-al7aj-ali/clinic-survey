@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>استطلاع العيادة</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/survey.css">
+</head>
+<body>
+
+<div id="app-loading" style="padding:48px;text-align:center;font-family:Cairo,sans-serif;color:#0B1F3A">
+  جاري تحميل الاستبيان…
+</div>
+<div id="app-error" class="is-hidden" style="padding:48px;text-align:center;font-family:Cairo,sans-serif;color:#DC2626"></div>
+<div id="app-root" class="is-hidden"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="js/app.js"></script>
+<script src="js/survey-ui.js"></script>
+</body>
+</html>

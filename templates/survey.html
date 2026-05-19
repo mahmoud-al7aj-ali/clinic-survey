@@ -81,14 +81,26 @@
     </div>
     <table class="ft">
       <thead><tr class="fth">
-        <td class="h-rate">التقييم</td>
+        <td class="h-rate">الإجابة</td>
         <td class="h-desc">الميزة والوصف</td>
         <td class="h-num">#</td>
       </tr></thead>
       <tbody>
         {% for f in block.features %}
-        <tr class="{{ 'odd' if loop.index is odd else 'even' }}" data-feature-num="{{ f.feature_num }}">
+        <tr class="{{ 'odd' if loop.index is odd else 'even' }}" data-feature-num="{{ f.feature_num }}" data-question-type="{{ f.question_type or 'rating' }}">
           <td class="c-rate">
+            {% if (f.question_type or 'rating') == 'yes_no' %}
+            <div class="rb-wrap rb-wrap-yn" role="radiogroup" aria-label="{{ f.title }}">
+              <button type="button" class="rb yn-yes" data-value="yes" aria-pressed="false">
+                <span class="rb-circle"></span>
+                <span class="rb-lbl">{{ yes_no_labels['yes'] }}</span>
+              </button>
+              <button type="button" class="rb yn-no" data-value="no" aria-pressed="false">
+                <span class="rb-circle"></span>
+                <span class="rb-lbl">{{ yes_no_labels['no'] }}</span>
+              </button>
+            </div>
+            {% else %}
             <div class="rb-wrap" role="radiogroup" aria-label="{{ f.title }}">
               {% for val, cls in [('very_important','g'), ('important','y'), ('nice_to_have','o'), ('not_needed','r')] %}
               <button type="button" class="rb {{ cls }}" data-value="{{ val }}" aria-pressed="false">
@@ -97,12 +109,13 @@
               </button>
               {% endfor %}
             </div>
+            {% endif %}
           </td>
           <td class="c-desc">
             <div class="fn-row">
               <span class="fn">{{ f.title }}</span>
               {% if f.long_description or f.description %}
-              <button type="button" class="btn-details" data-feature-id="{{ f.id }}" aria-label="عرض التفاصيل">التفاصيل</button>
+              <button type="button" class="btn-details" data-feature-id="{{ f.id }}" aria-label="اضغط لمزيد من التفاصيل">اضغط لمزيد من التفاصيل</button>
               {% endif %}
             </div>
             <div class="fi">{{ f.description }}</div>

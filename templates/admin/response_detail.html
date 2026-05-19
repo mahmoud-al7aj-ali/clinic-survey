@@ -19,7 +19,7 @@
   {% endif %}
 </div>
 
-{% for key, label in rating_labels.items() %}
+{% for key, label in answer_labels.items() %}
 {% if grouped[key] %}
 <div class="panel">
   <h2><span class="rating-pill {{ key }}">{{ label }}</span> ({{ grouped[key]|length }})</h2>

@@ -7,12 +7,37 @@ from supabase import Client, create_client
 
 load_dotenv()
 
+QUESTION_TYPE_RATING = "rating"
+QUESTION_TYPE_YES_NO = "yes_no"
+
 RATING_LABELS = {
     "very_important": "مهمة جداً",
     "important": "مهمة",
     "nice_to_have": "مفيدة",
     "not_needed": "غير ضرورية",
 }
+
+YES_NO_LABELS = {
+    "yes": "نعم",
+    "no": "لا",
+}
+
+ANSWER_LABELS = {**RATING_LABELS, **YES_NO_LABELS}
+
+
+def feature_question_type(feature):
+    return feature.get("question_type") or QUESTION_TYPE_RATING
+
+
+def is_valid_answer(feature, value):
+    qtype = feature_question_type(feature)
+    if qtype == QUESTION_TYPE_YES_NO:
+        return value in YES_NO_LABELS
+    return value in RATING_LABELS
+
+
+def answer_label(value):
+    return ANSWER_LABELS.get(value, value)
 
 RATING_WEIGHTS = {
     "very_important": 4,
@@ -340,7 +365,7 @@ def feature_rating_rankings(survey_id, sort_by="score"):
 
     features = (
         sb.table("features")
-        .select("id, feature_num, title, description, group_id")
+        .select("id, feature_num, title, description, group_id, question_type")
         .in_("group_id", group_ids)
         .eq("is_active", True)
         .execute()
@@ -372,6 +397,8 @@ def feature_rating_rankings(survey_id, sort_by="score"):
 
     items = []
     for f in features:
+        if feature_question_type(f) == QUESTION_TYPE_YES_NO:
+            continue
         g = group_map.get(f["group_id"], {})
         sec = section_map.get(g.get("section_id"), {})
         ratings = votes_by_feature.get(f["id"], [])
@@ -422,6 +449,89 @@ def feature_rating_rankings(survey_id, sort_by="score"):
                 x["feature_num"],
             )
         )
+    return items
+
+
+def yes_no_question_stats(survey_id):
+    sb = get_supabase()
+    sections = (
+        sb.table("sections").select("id, page_title").eq("survey_id", survey_id).execute().data
+        or []
+    )
+    section_map = {s["id"]: s for s in sections}
+    section_ids = list(section_map.keys())
+    if not section_ids:
+        return []
+
+    groups = (
+        sb.table("feature_groups")
+        .select("id, title, section_id")
+        .in_("section_id", section_ids)
+        .execute()
+        .data
+        or []
+    )
+    group_map = {g["id"]: g for g in groups}
+    group_ids = list(group_map.keys())
+    if not group_ids:
+        return []
+
+    features = [
+        f
+        for f in (
+            sb.table("features")
+            .select("id, feature_num, title, group_id, question_type")
+            .in_("group_id", group_ids)
+            .eq("is_active", True)
+            .execute()
+            .data
+            or []
+        )
+        if feature_question_type(f) == QUESTION_TYPE_YES_NO
+    ]
+    if not features:
+        return []
+
+    responses = (
+        sb.table("responses").select("id").eq("survey_id", survey_id).execute().data or []
+    )
+    response_ids = [r["id"] for r in responses]
+    answers = []
+    if response_ids:
+        answers = (
+            sb.table("response_answers")
+            .select("feature_id, rating")
+            .in_("response_id", response_ids)
+            .execute()
+            .data
+            or []
+        )
+
+    votes_by_feature = {}
+    for a in answers:
+        votes_by_feature.setdefault(a["feature_id"], []).append(a["rating"])
+
+    items = []
+    for f in features:
+        g = group_map.get(f["group_id"], {})
+        sec = section_map.get(g.get("section_id"), {})
+        ratings = votes_by_feature.get(f["id"], [])
+        yes_count = sum(1 for r in ratings if r == "yes")
+        no_count = sum(1 for r in ratings if r == "no")
+        total = yes_count + no_count
+        items.append(
+            {
+                "feature_num": f["feature_num"],
+                "title": f["title"],
+                "group_title": g.get("title"),
+                "page_title": sec.get("page_title"),
+                "yes_count": yes_count,
+                "no_count": no_count,
+                "total_votes": total,
+                "yes_pct": round(100 * yes_count / total, 1) if total else 0,
+            }
+        )
+    items.sort(key=lambda x: (-x["yes_pct"], -x["yes_count"], x["feature_num"]))
     return items
 
 
@@ -498,7 +608,9 @@ def list_all_features(survey_id):
     return features
 
 
-def add_feature(group_id, title, description, long_description):
+def add_feature(
+    group_id, title, description, long_description, question_type=QUESTION_TYPE_RATING
+):
     sb = get_supabase()
     existing = (
         sb.table("features")
@@ -511,6 +623,7 @@ def add_feature(group_id, title, description, long_description):
         or []
     )
     max_num = existing[0]["feature_num"] if existing else 0
+    qtype = question_type if question_type in (QUESTION_TYPE_RATING, QUESTION_TYPE_YES_NO) else QUESTION_TYPE_RATING
     sb.table("features").insert(
         {
             "group_id": group_id,
@@ -520,6 +633,7 @@ def add_feature(group_id, title, description, long_description):
             "long_description": long_description,
             "sort_order": 999,
             "is_active": True,
+            "question_type": qtype,
         }
     ).execute()
 
@@ -590,7 +704,7 @@ def get_response_answers(response_id):
     feature_ids = [a["feature_id"] for a in answers]
     features = (
         sb.table("features")
-        .select("id, feature_num, title")
+        .select("id, feature_num, title, question_type")
         .in_("id", feature_ids)
         .execute()
         .data
@@ -600,11 +714,14 @@ def get_response_answers(response_id):
     result = []
     for a in answers:
         f = fmap.get(a["feature_id"], {})
+        rating = a["rating"]
         result.append(
             {
                 "feature_num": f.get("feature_num"),
                 "title": f.get("title"),
-                "rating": a["rating"],
+                "rating": rating,
+                "rating_label": answer_label(rating),
+                "question_type": feature_question_type(f),
             }
         )
     result.sort(key=lambda x: x.get("feature_num") or 0)

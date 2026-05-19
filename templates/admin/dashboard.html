@@ -85,6 +85,41 @@
   {% endif %}
 </div>
 
+{% if yes_no_stats %}
+<div class="panel panel-rankings">
+  <h2>أسئلة نعم / لا</h2>
+  <p class="panel-hint">نسبة «نعم» من إجابات الأطباء</p>
+  {% if total_responses == 0 %}
+  <p class="empty-hint">لا توجد إجابات بعد.</p>
+  {% else %}
+  <div class="table-wrap">
+    <table class="data rankings-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>السؤال</th>
+          <th>نعم</th>
+          <th>لا</th>
+          <th>نسبة نعم</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in yes_no_stats %}
+        <tr>
+          <td>{{ q.feature_num }}</td>
+          <td><strong>{{ q.title }}</strong><span class="feat-meta">{{ q.page_title }} · {{ q.group_title }}</span></td>
+          <td>{{ q.yes_count }}</td>
+          <td>{{ q.no_count }}</td>
+          <td>{{ q.yes_pct }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="panel">
   <div class="toolbar">
     <a href="{{ url_for('admin_responses') }}" class="btn btn-primary">كل الإجابات</a>
@@ -95,7 +130,7 @@
   <table class="data">
     <thead><tr><th>التقييم</th><th>العدد</th></tr></thead>
     <tbody>
-      {% for key, label in rating_labels.items() %}
+      {% for key, label in answer_labels.items() %}
       <tr>
         <td><span class="rating-pill {{ key }}">{{ label }}</span></td>
         <td>{{ rating_counts.get(key, 0) }}</td>

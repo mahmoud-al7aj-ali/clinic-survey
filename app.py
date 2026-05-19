@@ -17,8 +17,11 @@ from flask import (
 from werkzeug.security import check_password_hash
 
 from database import (
+    ANSWER_LABELS,
     RATING_LABELS,
+    YES_NO_LABELS,
     add_feature,
+    is_valid_answer,
     count_active_features,
     count_responses,
     delete_feature,
@@ -43,6 +46,7 @@ from database import (
     update_feature,
     update_survey_settings,
     utc_now,
+    yes_no_question_stats,
 )
 from seed import seed
 
@@ -93,6 +97,7 @@ def survey():
         structure=structure,
         total=total,
         rating_labels=RATING_LABELS,
+        yes_no_labels=YES_NO_LABELS,
     )
 
 
@@ -118,6 +123,7 @@ def api_submit():
         return jsonify({"ok": False, "error": "لا يوجد استبيان نشط"}), 404
 
     features = get_survey_features(survey_row["id"])
+    features_by_num = {str(f["feature_num"]): f for f in features}
     by_num = {str(f["feature_num"]): f["id"] for f in features}
     expected = set(by_num.keys())
     provided = set(str(k) for k in answers.keys())
@@ -126,14 +132,15 @@ def api_submit():
         return jsonify(
             {
                 "ok": False,
-                "error": f"يرجى تقييم جميع الميزات ({len(provided)}/{len(expected)})",
+                "error": f"يرجى الإجابة على جميع الأسئلة ({len(provided)}/{len(expected)})",
                 "missing": list(expected - provided),
             }
         ), 400
 
-    for v in answers.values():
-        if v not in RATING_LABELS:
-            return jsonify({"ok": False, "error": "تقييم غير صالح"}), 400
+    for num, value in answers.items():
+        feature = features_by_num.get(str(num))
+        if not feature or not is_valid_answer(feature, value):
+            return jsonify({"ok": False, "error": "إجابة غير صالحة"}), 400
 
     _, err, updated = save_survey_response(
         survey_row["id"],
@@ -206,6 +213,7 @@ def admin_dashboard():
     if sort_by not in ("score", "very_important", "num"):
         sort_by = "score"
     feature_rankings_list = feature_rating_rankings(sid, sort_by)
+    yes_no_stats = yes_no_question_stats(sid)
     rated_features_count = sum(1 for f in feature_rankings_list if f["total_votes"])
 
     return render_template(
@@ -217,7 +225,9 @@ def admin_dashboard():
         recent=recent,
         rating_counts=rating_counts,
         rating_labels=RATING_LABELS,
+        answer_labels=ANSWER_LABELS,
         feature_rankings=feature_rankings_list,
+        yes_no_stats=yes_no_stats,
         sort_by=sort_by,
     )
 
@@ -270,6 +280,7 @@ def admin_features():
                     request.form.get("title", "ميزة جديدة").strip(),
                     short,
                     long_d,
+                    question_type=request.form.get("question_type", "rating"),
                 )
                 flash("تمت إضافة الميزة", "ok")
         elif action == "save":
@@ -284,6 +295,7 @@ def admin_features():
                     "long_description": long_d or short,
                     "feature_num": int(request.form.get("feature_num") or 0),
                     "is_active": bool(request.form.get("is_active")),
+                    "question_type": request.form.get("question_type", "rating"),
                 },
             )
             flash("تم الحفظ", "ok")
@@ -298,6 +310,7 @@ def admin_features():
         structure=survey_structure(sid),
         all_groups=list_feature_groups(sid),
         all_features=list_all_features(sid),
+        question_types={"rating": "تقييم (4 خيارات)", "yes_no": "نعم / لا"},
     )
 
 
@@ -328,14 +341,14 @@ def admin_response_detail(response_id):
     if not resp:
         return "غير موجود", 404
     answers = get_response_answers(response_id)
-    grouped = {k: [] for k in RATING_LABELS}
+    grouped = {k: [] for k in ANSWER_LABELS}
     for a in answers:
         grouped[a["rating"]].append(a)
     return render_template(
         "admin/response_detail.html",
         response=resp,
         grouped=grouped,
-        rating_labels=RATING_LABELS,
+        answer_labels=ANSWER_LABELS,
     )
 
 
@@ -377,7 +390,7 @@ def admin_export_csv():
         ]
         for f in features:
             rating = ans_map.get(f["id"], "")
-            row.append(RATING_LABELS.get(rating, rating))
+            row.append(ANSWER_LABELS.get(rating, rating))
         writer.writerow(row)
 
     return app.response_class(

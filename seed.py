@@ -392,6 +392,7 @@ def seed(force=False):
                     "long_description": long_description.strip(),
                     "sort_order": f_order,
                     "is_active": True,
+                    "question_type": "rating",
                 }
                 for f_order, (num, title, desc, long_description) in enumerate(feats)
             ]
